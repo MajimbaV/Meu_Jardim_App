@@ -18,8 +18,9 @@ DoubleResetDetector* drd;
 // --- CONFIGURAÇÕES DO EMQX (MQTT) ---
 const char* mqtt_server = "emqx.ifspb-czemnumeros.com.br";
 const int mqtt_port = 1883;
-const char* mqtt_user = "esp12_01";
-const char* mqtt_pass = "esp12_01";
+// exemplo de usuário e senha do EMQX (você pode criar o seu próprio usuário e senha no painel do EMQX)
+const char* mqtt_user = "esp12";
+const char* mqtt_pass = "esp12";
 
 // --- MAPEAMENTO DE PINOS ---
 const int RELE1 = 12; // D6
