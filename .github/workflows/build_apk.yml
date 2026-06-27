@@ -2,8 +2,8 @@ name: Build Flet APK
 
 on:
   push:
-    branches: [ "main" ] # Executa a cada push na branch main
-  workflow_dispatch: # Permite que você execute o build manualmente se quiser
+    branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -16,7 +16,7 @@ jobs:
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
-        python-file: '3.13' # Versão recomendada para estabilidade do Flet
+        python-version: '3.11' # <- CORRIGIDO AQUI (de python-file para python-version)
 
     - name: Install Python Dependencies
       run: |
@@ -31,11 +31,10 @@ jobs:
 
     - name: Build APK with Flet
       run: |
-        # O Flet usa o Flutter por baixo dos panos para empacotar o APK
         flet build apk --main main.py
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
         name: meu-jardim-apk
-        path: build/apk/app-release.apk # Caminho padrão gerado pelo Flet build
+        path: build/apk/app-release.apk
