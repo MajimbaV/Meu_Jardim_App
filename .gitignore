@@ -216,3 +216,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+# Ignorar compilações do ESP8266 (PlatformIO / Arduino)
+.pio/
+.vscode/
+*.bin
+*.elf
