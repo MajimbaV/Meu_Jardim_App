@@ -1,0 +1,3 @@
+// exemplo de usuário e senha do EMQX (você pode criar o seu próprio usuário e senha no painel do EMQX)
+const char* mqtt_user = "esp12_01";
+const char* mqtt_pass = "esp12_01";
