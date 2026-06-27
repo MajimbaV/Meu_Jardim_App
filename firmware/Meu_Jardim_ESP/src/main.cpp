@@ -7,7 +7,7 @@
 #define ESP8266
 #include <ESP_DoubleResetDetector.h>
 
-// Tempo em segundos que você tem para apertar o RST pela segunda vez
+// Tempo em segundos que para apertar o RST pela segunda vez
 #define DRD_TIMEOUT 5 
 // Endereço na memória RTC onde ele anota que foi reiniciado (não mude)
 #define DRD_ADDRESS 0
@@ -120,7 +120,7 @@ void setup() {
         "if(btn.innerText.includes('Info')) btn.innerText = 'Informações do Sistema';"
       "});"
 
-      /* Traduz as caixas roxas de Mensagem (as que você apontou nas setas) */
+      /* Traduz as caixas roxas de Mensagem (originais da biblioteca) */
       "var mensagens = document.querySelectorAll('.msg');"
       "mensagens.forEach(function(msg){"
         "if(msg.innerHTML.includes('No AP set')) msg.innerHTML = 'Nenhuma rede selecionada. Clique em uma rede acima.';"
