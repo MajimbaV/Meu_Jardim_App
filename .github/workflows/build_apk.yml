@@ -22,7 +22,8 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install flet
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        # CORRIGIDO: Agora aponta para o requirements.txt dentro da pasta app
+        if [ -f app/requirements.txt ]; then pip install -r app/requirements.txt; fi
 
     - name: Set up Java
       uses: actions/setup-java@v4
@@ -33,8 +34,21 @@ jobs:
     - name: Build APK with Flet
       run: |
         # O comando 'yes' injeta a resposta "y" automaticamente para aceitar o download do Flutter SDK
-        yes | flet build apk
+        yes | flet build apk app
 
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: meu-jardim-apk
+        path: build/apk/app-release.apk
+
+
+    - name: Build APK with Flet
+      run: |
+        # CORRIGIDO: Passamos a pasta 'app' para o comando flet build apk
+        yes | flet build apk app
+        
+        #Variables do python
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:

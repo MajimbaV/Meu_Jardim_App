@@ -8,3 +8,4 @@ Para criar um ambiente virtual no Windows, siga os seguintes passos:
 Requirement already satisfied: pip in .\.venv\lib\site-packages (26.1.2)
  pip install flet paho-mqtt
 ´´´
+
