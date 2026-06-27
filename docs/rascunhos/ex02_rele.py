@@ -5,8 +5,8 @@ import random
 # --- CONFIGURAÇÕES ---
 MQTT_SERVER = "emqx.ifspb-czemnumeros.com.br"
 MQTT_PORT = 1883
-MQTT_USER = "esp12_01"
-MQTT_PASS = "esp12_01"
+MQTT_USER = "esp12"
+MQTT_PASS = "esp12"
 
 def main(page: ft.Page):
     page.title = "Controle ESP12"
