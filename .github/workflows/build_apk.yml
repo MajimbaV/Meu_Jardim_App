@@ -16,7 +16,7 @@ jobs:
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11' # <- CORRIGIDO AQUI (de python-file para python-version)
+        python-version: '3.11'
 
     - name: Install Python Dependencies
       run: |
@@ -31,7 +31,7 @@ jobs:
 
     - name: Build APK with Flet
       run: |
-        flet build apk --main main.py
+        flet build apk
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
