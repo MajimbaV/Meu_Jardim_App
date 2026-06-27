@@ -24,14 +24,16 @@ jobs:
         pip install flet
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-    - name: Setup Flutter
-      uses: subosito/flutter-action@v2
+    - name: Set up Java
+      uses: actions/setup-java@v4
       with:
-        channel: 'stable'
+        distribution: 'zulu'
+        java-version: '17' # Necessário para o compilador do Android (Gradle) rodar sem erros
 
     - name: Build APK with Flet
       run: |
-        flet build apk
+        # O comando 'yes' injeta a resposta "y" automaticamente para aceitar o download do Flutter SDK
+        yes | flet build apk
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
