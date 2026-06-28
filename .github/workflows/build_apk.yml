@@ -1,4 +1,4 @@
-name: Build Flet APK and AAB
+name: Build Flet APK and Signed AAB
 
 on:
   push:
@@ -31,31 +31,35 @@ jobs:
         distribution: 'zulu'
         java-version: '17' # Necessário para o compilador do Android (Gradle) rodar sem erros
 
+        - name: Decode Keystore
+      env:
+        PLAY_STORE_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      run: |
+        # Transforma o texto do GitHub Secret de volta no arquivo físico keystore de forma segura
+        echo "$PLAY_STORE_KEYSTORE" | base64 --decode > app/meu-jardim.keystore
+
     - name: Build APK with Flet
       run: |
         # O comando 'yes' injeta a resposta "y" automaticamente para aceitar o download do Flutter SDK
         yes | flet build apk app
 
-    - name: Build AAB (App Bundle) with Flet
+    - name: Build Signed AAB with Flet (Para Produção)
+      env:
+        FLET_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        FLET_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        FLET_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
       run: |
-        # Gerando o formato obrigatório para a Play Store
-        yes | flet build appbundle app
+        # Compila o AAB injetando as variáveis de ambiente que o Flet exige para assinar o arquivo
+        yes | flet build appbundle app --keystore meu-jardim.keystore
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
         name: meu-jardim-apk
-        path: build/apk/app-release.apk
-        
-        #Variables do python
-    - name: Upload APK Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: meu-jardim-apk
-        path: app/build/apk/*.apk # <- CORRIGIDO: Adicionado 'app/' no início do caminho
+        path: app/build/apk/*.apk
 
-    - name: Upload AAB Artifact
+    - name: Upload Signed AAB Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: meu-jardim-aab
-        path: app/build/appbundle/*.aab # # Captura o arquivo .aab gerado
+        name: meu-jardim-aab-assinado
+        path: app/build/appbundle/*.aab
