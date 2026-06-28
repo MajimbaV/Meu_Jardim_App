@@ -44,13 +44,15 @@ jobs:
         yes | flet build apk app
 
     - name: Build Signed AAB with Flet (Para Produção)
+      env:
+        # Passando os segredos de forma nativa como variáveis de ambiente para o Flet ler automaticamente
+        FLET_ANDROID_KEYSTORE_PATH: "meu-jardim.keystore"
+        FLET_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        FLET_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        FLET_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
       run: |
-        # CORRIGIDO: Alterado de 'appbundle' para 'aab' e adicionadas as flags da keystore de forma direta
-        yes | flet build aab app \
-          --keystore meu-jardim.keystore \
-          --keystore-password "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
-          --key-alias "${{ secrets.ANDROID_KEY_ALIAS }}" \
-          --key-password "${{ secrets.ANDROID_KEY_PASSWORD }}"
+        # O comando volta a ser simples e direto, sem flags que causam erro
+        yes | flet build aab app
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
