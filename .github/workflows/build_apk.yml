@@ -53,4 +53,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: meu-jardim-apk
-        path: build/apk/app-release.apk
+        path: app/build/apk/app-release.apk # <- CORRIGIDO: Adicionado 'app/' no início do caminho
