@@ -223,3 +223,9 @@ __marimo__/
 .vscode/
 *.bin
 *.elf
+
+# arquvios do app do meu jardim
+.apk/
+*.aab
+*.zip
+*.apk
