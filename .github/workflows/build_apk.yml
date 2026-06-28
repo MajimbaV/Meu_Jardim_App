@@ -1,4 +1,4 @@
-name: Build Flet APK
+name: Build Flet APK and AAB
 
 on:
   push:
@@ -36,17 +36,16 @@ jobs:
         # O comando 'yes' injeta a resposta "y" automaticamente para aceitar o download do Flutter SDK
         yes | flet build apk app
 
+    - name: Build AAB (App Bundle) with Flet
+      run: |
+        # Gerando o formato obrigatório para a Play Store
+        yes | flet build appbundle app
+
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
         name: meu-jardim-apk
         path: build/apk/app-release.apk
-
-
-    - name: Build APK with Flet
-      run: |
-        # CORRIGIDO: Passamos a pasta 'app' para o comando flet build apk
-        yes | flet build apk app
         
         #Variables do python
     - name: Upload APK Artifact
@@ -54,3 +53,9 @@ jobs:
       with:
         name: meu-jardim-apk
         path: app/build/apk/*.apk # <- CORRIGIDO: Adicionado 'app/' no início do caminho
+
+    - name: Upload AAB Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: meu-jardim-aab
+        path: app/build/appbundle/*.aab # # Captura o arquivo .aab gerado
