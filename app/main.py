@@ -12,10 +12,10 @@ MQTT_PORT = 1883
 MQTT_USER = "esp12_01"
 MQTT_PASS = "esp12_01"
 
-# Dicionário global básico (Mudado dias_agenda para list para evitar erros de conversão de set)
+# Dicionário global para controlar o estado das automações
 automacoes = {
-    "D6": {"timer_minutos": 0, "hora_agenda": "18:00", "dias_agenda": []},
-    "D7": {"timer_minutos": 0, "hora_agenda": "18:00", "dias_agenda": []}
+    "D6": {"timer_minutos": 0, "hora_agenda": "18:00", "dias_agenda": set(), "timer_objeto": None},
+    "D7": {"timer_minutos": 0, "hora_agenda": "18:00", "dias_agenda": set(), "timer_objeto": None}
 }
 
 def main(page: ft.Page):
@@ -23,18 +23,18 @@ def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.DARK
     page.window_width = 400
     page.window_height = 700
-    page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
+    page.horizontal_alignment = "center"
 
     # --- BARRA SUPERIOR ---
     page.appbar = ft.AppBar(
-        title=ft.Text("🏡 AUTOMAÇÃO", size=22, weight=ft.FontWeight.BOLD),
+        title=ft.Text("🏡 AUTOMAÇÃO", size=22, weight="bold"),
         center_title=True,
-        bgcolor=ft.Colors.SURFACE_VARIANT,
+        bgcolor="surface",
     )
 
     # --- STATUS DO BROKER ---
     status_led = ft.Container(width=12, height=12, bgcolor="red", border_radius=6)
-    status_text = ft.Text("Desconectado", color="red", weight=ft.FontWeight.BOLD)
+    status_text = ft.Text("Desconectado", color="red", weight="bold")
 
     # --- CLIENTE MQTT ---
     client_id = f'flet-mqtt-{random.randint(0, 1000)}'
@@ -54,105 +54,176 @@ def main(page: ft.Page):
 
     mqttc.on_connect = on_connect
 
+    # --- FUNÇÃO ATUADORA (MUDAR RELE) ---
     def mudar_rele(e):
         topic = e.control.data
         msg = "ON" if e.control.value else "OFF"
+        
+        if msg == "OFF" and automacoes[topic]["timer_objeto"] is not None:
+            try:
+                automacoes[topic]["timer_objeto"].cancel()
+                automacoes[topic]["timer_objeto"] = None
+            except Exception:
+                pass
+
         try:
             mqttc.publish(topic, msg)
         except Exception as err:
             print(f"Erro MQTT: {err}")
 
-    # --- PERSISTÊNCIA LOCAL SIMPLIFICADA ---
+    # --- PERSISTÊNCIA LOCAL ---
     def salvar_dados_no_disco():
         try:
-            page.client_storage.set("config_automacoes", json.dumps(automacoes))
+            dados_para_salvar = {
+                "D6": {
+                    "timer_minutos": automacoes["D6"]["timer_minutos"],
+                    "hora_agenda": automacoes["D6"]["hora_agenda"],
+                    "dias_agenda": list(automacoes["D6"]["dias_agenda"])
+                },
+                "D7": {
+                    "timer_minutos": automacoes["D7"]["timer_minutos"],
+                    "hora_agenda": automacoes["D7"]["hora_agenda"],
+                    "dias_agenda": list(automacoes["D7"]["dias_agenda"])
+                }
+            }
+            page.client_storage.set("config_automacoes", json.dumps(dados_para_salvar))
         except Exception as e:
             print(f"Erro ao salvar: {e}")
 
-    # --- COMPONENTES VISUAIS DOS CORES/INPUTS ---
-    txt_timer_d6 = ft.TextField(label="Minutos", value="30", width=90, text_align=ft.TextAlign.CENTER, dense=True)
-    txt_hora_d6 = ft.TextField(label="HH:MM", value="18:00", width=90, text_align=ft.TextAlign.CENTER, dense=True)
-    chips_d6 = {}
+    # --- LÓGICA DO TEMPORIZADOR (TIMER) ---
+    def desligar_por_timeout(pino_rele, switch_componente):
+        try:
+            mqttc.publish(pino_rele, "OFF")
+            switch_componente.value = False
+            automacoes[pino_rele]["timer_objeto"] = None
+            page.update()
+        except Exception as e:
+            print(f"Erro no timeout do timer: {e}")
 
-    txt_timer_d7 = ft.TextField(label="Minutos", value="30", width=90, text_align=ft.TextAlign.CENTER, dense=True)
-    txt_hora_d7 = ft.TextField(label="HH:MM", value="18:00", width=90, text_align=ft.TextAlign.CENTER, dense=True)
-    chips_d7 = {}
+    def acionar_temporizador(pino_rele, txt_timer, switch_componente):
+        try:
+            minutos = int(txt_timer.value)
+        except ValueError:
+            page.open(ft.SnackBar(ft.Text("Insira um número válido de minutos!")))
+            return
 
-    def criar_bloco_automacao(pino_rele, txt_timer, txt_hora, chips_dict):
+        if minutos <= 0:
+            page.open(ft.SnackBar(ft.Text("O tempo deve ser maior que zero!")))
+            return
+
+        if automacoes[pino_rele]["timer_objeto"] is not None:
+            automacoes[pino_rele]["timer_objeto"].cancel()
+
+        mqttc.publish(pino_rele, "ON")
+        switch_componente.value = True
+        page.update()
+
+        segundos = minutes = minutos * 60
+        t = threading.Timer(segundos, desligar_por_timeout, args=[pino_rele, switch_componente])
+        automacoes[pino_rele]["timer_objeto"] = t
+        automacoes[pino_rele]["timer_minutos"] = minutos
+        t.start()
+        
+        salvar_dados_no_disco()
+        page.open(ft.SnackBar(ft.Text(f"{pino_rele} ligado! Vai desligar em {minutos} min.")))
+
+    # --- INPUTS VISUAIS ---
+    txt_timer_d6 = ft.TextField(label="Minutos", value="30", width=90, text_align="center", dense=True)
+    txt_hora_d6 = ft.TextField(label="HH:MM", value="18:00", width=90, text_align="center", dense=True)
+    buttons_d6 = {}
+
+    txt_timer_d7 = ft.TextField(label="Minutos", value="30", width=90, text_align="center", dense=True)
+    txt_hora_d7 = ft.TextField(label="HH:MM", value="18:00", width=90, text_align="center", dense=True)
+    buttons_d7 = {}
+
+    switch_luz = ft.Switch(value=False, data="D6", on_change=mudar_rele)
+    switch_tomada = ft.Switch(value=False, data="D7", on_change=mudar_rele)
+
+    # --- CONSTRUTOR DE BLOCOS ---
+    def criar_bloco_automacao(pino_rele, txt_timer, txt_hora, buttons_dict, switch_componente):
         def salvar_agenda(e):
             automacoes[pino_rele]["hora_agenda"] = txt_hora.value
             salvar_dados_no_disco()
-            page.open(ft.SnackBar(ft.Text(f"Agenda de {pino_rele} salva!")))
+            page.open(ft.SnackBar(ft.Text(f"Agenda de {pino_rele} salva para as {txt_hora.value}!")))
 
-        def alternar_dia_chip(e):
-            dia = e.control.label.value
-            if e.control.selected:
-                if dia not in automacoes[pino_rele]["dias_agenda"]:
-                    automacoes[pino_rele]["dias_agenda"].append(dia)
+        def alternar_dia_btn(e):
+            dia = e.control.data
+            if dia in automacoes[pino_rele]["dias_agenda"]:
+                automacoes[pino_rele]["dias_agenda"].discard(dia)
+                e.control.style = ft.ButtonStyle(bgcolor=None)
             else:
-                if dia in automacoes[pino_rele]["dias_agenda"]:
-                    automacoes[pino_rele]["dias_agenda"].remove(dia)
+                automacoes[pino_rele]["dias_agenda"].add(dia)
+                e.control.style = ft.ButtonStyle(bgcolor="blue")
+            
             salvar_dados_no_disco()
+            page.update()
 
         dias_semana = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
-        lista_chips = []
+        lista_botoes = []
         
         for d in dias_semana:
-            ch = ft.Chip(
-                label=ft.Text(d), 
-                selectable=True,
-                selected=False,
-                on_select=alternar_dia_chip
+            # Substituído padding instanciado por valor inteiro/direto para máxima compatibilidade
+            btn = ft.ElevatedButton(
+                text=d,
+                data=d,
+                style=ft.ButtonStyle(bgcolor=None),
+                content=ft.Container(
+                    content=ft.Text(d, size=11, weight="bold"),
+                    padding=2
+                ),
+                on_click=alternar_dia_btn
             )
-            chips_dict[d] = ch
-            lista_chips.append(ch)
+            buttons_dict[d] = btn
+            lista_botoes.append(btn)
 
         return ft.ExpansionTile(
-            title=ft.Text("Configurar Temporizador e Agenda", size=13, color=ft.Colors.BLUE_200),
+            title=ft.Text("Configurar Temporizador e Agenda", size=13, color="blue200"),
             maintain_state=True,
             controls=[
                 ft.Container(
                     padding=10,
-                    bgcolor=ft.Colors.BLACK26,
+                    bgcolor="black26",
                     border_radius=8,
                     content=ft.Column([
-                        # Linha do Timer (Corrigidos os parâmetros do IconButton)
+                        # Linha do Temporizador
                         ft.Row([
                             ft.Icon(ft.Icons.TIMER, color="amber"),
-                            ft.Text("Desligar em:", weight=ft.FontWeight.W_500),
+                            ft.Text("Desligar em:", weight="w500"),
                             txt_timer,
-                            ft.IconButton(icon=ft.Icons.PLAY_ARROW_ROUNDED, icon_color="green")
-                        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                            ft.IconButton(
+                                icon=ft.Icons.PLAY_ARROW_ROUNDED, 
+                                icon_color="green",
+                                on_click=lambda e: acionar_temporizador(pino_rele, txt_timer, switch_componente)
+                            )
+                        ], alignment="spaceBetween"),
                         
                         ft.Divider(height=10, color="white10"),
                         
-                        # Linha da Agenda (Corrigidos os parâmetros do IconButton)
+                        # Linha da Agenda
                         ft.Row([
                             ft.Icon(ft.Icons.SCHEDULE, color="blue"),
-                            ft.Text("Ligar às:", weight=ft.FontWeight.W_500),
+                            ft.Text("Ligar às:", weight="w500"),
                             txt_hora,
                             ft.IconButton(icon=ft.Icons.SAVE, icon_color="blue", on_click=salvar_agenda)
-                        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                        ], alignment="spaceBetween"),
                         
                         ft.Text("Dias da semana:", size=12, color="white60"),
-                        ft.Row(lista_chips, wrap=True, alignment=ft.MainAxisAlignment.CENTER)
+                        ft.Row(lista_botoes, wrap=True, alignment="center", spacing=5)
                     ], spacing=10)
                 )
             ]
         )
 
-    switch_luz = ft.Switch(value=False, data="D6", on_change=mudar_rele)
-    switch_tomada = ft.Switch(value=False, data="D7", on_change=mudar_rele)
-
+    # --- MONTAGEM DOS CARDS ---
     card_luz = ft.Card(
         content=ft.Container(
             padding=12,
             content=ft.Column([
                 ft.Row([
-                    ft.Row([ft.Icon(ft.Icons.LIGHTBULB, color="amber", size=28), ft.Text("Luz (D6)", size=18, weight=ft.FontWeight.W_500)]),
+                    ft.Row([ft.Icon(ft.Icons.LIGHTBULB, color="amber", size=28), ft.Text("Luz (D6)", size=18, weight="w500")]),
                     switch_luz
-                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                criar_bloco_automacao("D6", txt_timer_d6, txt_hora_d6, chips_d6)
+                ], alignment="spaceBetween"),
+                criar_bloco_automacao("D6", txt_timer_d6, txt_hora_d6, buttons_d6, switch_luz)
             ])
         )
     )
@@ -162,69 +233,59 @@ def main(page: ft.Page):
             padding=12,
             content=ft.Column([
                 ft.Row([
-                    ft.Row([ft.Icon(ft.Icons.POWER, color="blue_grey_200", size=28), ft.Text("Tomada (D7)", size=18, weight=ft.FontWeight.W_500)]),
+                    ft.Row([ft.Icon(ft.Icons.POWER, color="blueGrey200", size=28), ft.Text("Tomada (D7)", size=18, weight="w500")]),
                     switch_tomada
-                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                criar_bloco_automacao("D7", txt_timer_d7, txt_hora_d7, chips_d7)
+                ], alignment="spaceBetween"),
+                criar_bloco_automacao("D7", txt_timer_d7, txt_hora_d7, buttons_d7, switch_tomada)
             ])
         )
     )
 
-    # --- ADICIONA TUDO NA TELA DIRETAMENTE ---
+    # --- RENDERIZAÇÃO DA INTERFACE ---
     page.add(
-        ft.Container(height=10),
-        ft.Row([status_led, status_text], alignment=ft.MainAxisAlignment.CENTER),
+        ft.Container(height=15),
+        ft.Row([status_led, status_text], alignment="center"),
         ft.Divider(),
         card_luz,
         card_tomada
     )
     page.update()
 
-    # --- INICIALIZAÇÃO SECUNDÁRIA (BACKGROUND THREAD) ---
+    # --- PROCESSAMENTO ASSÍNCRONO EM BACKGROUND THREAD ---
     def carregar_dados_e_conectar_mqtt():
         time.sleep(0.2)
-        # Conexão MQTT
         try:
             mqttc.connect(MQTT_SERVER, MQTT_PORT, 60)
             mqttc.loop_start()
         except Exception:
             pass
 
-        # Recuperação do storage local
         try:
             dados_salvos = page.client_storage.get("config_automacoes")
             if dados_salvos:
                 dados_dict = json.loads(dados_salvos)
                 
-                # Sincroniza dados da Luz D6
-                if "D6" in dados_dict:
-                    automacoes["D6"]["hora_agenda"] = dados_dict["D6"].get("hora_agenda", "18:00")
-                    automacoes["D6"]["timer_minutos"] = dados_dict["D6"].get("timer_minutos", 0)
-                    automacoes["D6"]["dias_agenda"] = dados_dict["D6"].get("dias_agenda", [])
-                    
-                    txt_hora_d6.value = automacoes["D6"]["hora_agenda"]
-                    if automacoes["D6"]["timer_minutos"] > 0:
-                        txt_timer_d6.value = str(automacoes["D6"]["timer_minutos"])
-                    for dia, chip_obj in chips_d6.items():
-                        chip_obj.selected = dia in automacoes["D6"]["dias_agenda"]
-
-                # Sincroniza dados da Tomada D7
-                if "D7" in dados_dict:
-                    automacoes["D7"]["hora_agenda"] = dados_dict["D7"].get("hora_agenda", "18:00")
-                    automacoes["D7"]["timer_minutos"] = dados_dict["D7"].get("timer_minutos", 0)
-                    automacoes["D7"]["dias_agenda"] = dados_dict["D7"].get("dias_agenda", [])
-                    
-                    txt_hora_d7.value = automacoes["D7"]["hora_agenda"]
-                    if automacoes["D7"]["timer_minutos"] > 0:
-                        txt_timer_d7.value = str(automacoes["D7"]["timer_minutos"])
-                    for dia, chip_obj in chips_d7.items():
-                        chip_obj.selected = dia in automacoes["D7"]["dias_agenda"]
+                for pino, txt_hora_comp, txt_timer_comp, btns_dict in [("D6", txt_hora_d6, txt_timer_d6, buttons_d6), ("D7", txt_hora_d7, txt_timer_d7, buttons_d7)]:
+                    if pino in dados_dict:
+                        automacoes[pino]["hora_agenda"] = dados_dict[pino].get("hora_agenda", "18:00")
+                        automacoes[pino]["timer_minutos"] = dados_dict[pino].get("timer_minutos", 0)
+                        automacoes[pino]["dias_agenda"] = set(dados_dict[pino].get("dias_agenda", []))
+                        
+                        txt_hora_comp.value = automacoes[pino]["hora_agenda"]
+                        if automacoes[pino]["timer_minutos"] > 0:
+                            txt_timer_comp.value = str(automacoes[pino]["timer_minutos"])
+                        
+                        for dia, btn_obj in btns_dict.items():
+                            if dia in automacoes[pino]["dias_agenda"]:
+                                btn_obj.style = ft.ButtonStyle(bgcolor="blue")
+                            else:
+                                btn_obj.style = ft.ButtonStyle(bgcolor=None)
                 
                 page.update()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Erro ao recuperar dados: {e}")
 
-    # --- LOOP DO RELÓGIO DA AGENDA ---
+    # --- ENGINE DE AGENDAMENTO SEMANAL ---
     def loop_verificacao_horario():
         while True:
             agora = datetime.datetime.now()
@@ -243,7 +304,6 @@ def main(page: ft.Page):
 
             time.sleep(60)
 
-    # Dispara as duas rotinas sem travar a interface
     threading.Thread(target=carregar_dados_e_conectar_mqtt, daemon=True).start()
     threading.Thread(target=loop_verificacao_horario, daemon=True).start()
 
