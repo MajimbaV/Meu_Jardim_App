@@ -9,3 +9,7 @@ Requirement already satisfied: pip in .\.venv\lib\site-packages (26.1.2)
  pip install flet paho-mqtt
 ´´´
 
+para rodar o app "
+´´´
+.\.venv\Scripts\python.exe app/main.py
+´´´
