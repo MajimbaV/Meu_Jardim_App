@@ -38,7 +38,7 @@ def main(page: ft.Page):
 
     # --- CLIENTE MQTT ---
     client_id = f'flet-mqtt-{random.randint(0, 1000)}'
-    mqttc = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, client_id=client_id)
+    mqttc = mqtt.Client(mqtt.CallbackAPIVersion.V1, client_id=client_id)
     mqttc.username_pw_set(MQTT_USER, MQTT_PASS)
 
     def on_connect(client, userdata, flags, rc):
@@ -170,7 +170,7 @@ def main(page: ft.Page):
             # Criando chips customizados usando Containers puros dentro de um detector de cliques
             container_chip = ft.Container(
                 content=ft.Text(d, size=11, weight="bold", color="white"),
-                alignment=ft.alignment.center,
+                alignment=ft.alignment.CENTER,
                 padding=8,
                 width=45,
                 height=32,
@@ -323,4 +323,4 @@ def main(page: ft.Page):
     threading.Thread(target=carregar_dados_e_conectar_mqtt, daemon=True).start()
     threading.Thread(target=loop_verificacao_horario, daemon=True).start()
 
-ft.app(target=main)
+ft.app(main)
