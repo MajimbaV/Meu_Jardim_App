@@ -68,13 +68,13 @@ def main(page: ft.Page):
         except Exception as err:
             print(f"Erro ao publicar: {err}")
 
-    # --- LÓGICA DE AGENDAMENTO (BACKGROUND THREAD) ---
+    # --- LÓGICA DE AGENDAMENTO (CORRIGIDA) ---
     def loop_verificacao_horario():
         while True:
             agora = datetime.datetime.now()
             dias_map = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
             dia_atual_str = dias_map[agora.weekday()]
-            hora_atual_str = grandma = agora.strftime("%H:%M")
+            hora_atual_str = agora.strftime("%H:%M") # Corrigido aqui!
 
             for pino, dados in automacoes.items():
                 if dados["hora_agenda"] == hora_atual_str and dia_atual_str in dados["dias_agenda"]:
@@ -106,7 +106,7 @@ def main(page: ft.Page):
         except Exception as e:
             print(f"Erro ao persistir dados: {e}")
 
-    # --- CAMPOS DE INTERFACE VISUAL ACESSÍVEIS REORGANIZADOS ---
+    # --- ELEMENTOS VISUAIS ---
     txt_timer_d6 = ft.TextField(label="Minutos", value="30", width=90, text_align=ft.TextAlign.CENTER, dense=True)
     txt_hora_d6 = ft.TextField(label="HH:MM", value="18:00", width=90, text_align=ft.TextAlign.CENTER, dense=True)
     chips_d6 = {}
@@ -130,8 +130,8 @@ def main(page: ft.Page):
             salvar_dados_no_disco()
 
         dias_semana = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
-        
         lista_chips = []
+        
         for d in dias_semana:
             ch = ft.Chip(
                 label=ft.Text(d), 
@@ -175,7 +175,6 @@ def main(page: ft.Page):
             ]
         )
 
-    # --- COMPONENTES DOS CARDS PRINCIPAIS ---
     switch_luz = ft.Switch(value=False, data="D6", on_change=mudar_rele)
     switch_tomada = ft.Switch(value=False, data="D7", on_change=mudar_rele)
 
@@ -205,7 +204,7 @@ def main(page: ft.Page):
         )
     )
 
-    # --- MONTAGEM COMPLETA DA INTERFACE (MUITO RÁPIDA) ---
+    # --- MONTAGEM DA RENDERIZAÇÃO ---
     page.add(
         ft.Container(height=10),
         ft.Row([status_led, status_text], alignment=ft.MainAxisAlignment.CENTER),
@@ -214,24 +213,24 @@ def main(page: ft.Page):
         card_tomada
     )
 
-    # Força a renderização visual imediata na tela do Android para evitar tela escura
     page.update()
 
-    # --- CARREGAMENTO ASSÍNCRONO DOS DADOS APÓS A TELA ESTAR PRONTA ---
+    # --- RECUPERAÇÃO SEGURA DE DADOS SALVOS ---
     def carregar_e_atualizar_interface():
         try:
+            if not page.client_storage.contains_key("config_automacoes"):
+                return
+            
             dados_salvos = page.client_storage.get("config_automacoes")
             if dados_salvos:
                 dados_dict = json.loads(dados_salvos)
                 
-                # Atualiza dicionário global
                 for pino in ["D6", "D7"]:
                     if pino in dados_dict:
                         automacoes[pino]["timer_minutos"] = dados_dict[pino].get("timer_minutos", 0)
                         automacoes[pino]["hora_agenda"] = dados_dict[pino].get("hora_agenda", "")
                         automacoes[pino]["dias_agenda"] = set(dados_dict[pino].get("dias_agenda", []))
 
-                # Alimenta os inputs da Luz (D6)
                 if automacoes["D6"]["hora_agenda"]:
                     txt_hora_d6.value = automacoes["D6"]["hora_agenda"]
                 if automacoes["D6"]["timer_minutos"] > 0:
@@ -239,7 +238,6 @@ def main(page: ft.Page):
                 for dia, chip_obj in chips_d6.items():
                     chip_obj.selected = dia in automacoes["D6"]["dias_agenda"]
 
-                # Alimenta os inputs da Tomada (D7)
                 if automacoes["D7"]["hora_agenda"]:
                     txt_hora_d7.value = automacoes["D7"]["hora_agenda"]
                 if automacoes["D7"]["timer_minutos"] > 0:
@@ -247,15 +245,13 @@ def main(page: ft.Page):
                 for dia, chip_obj in chips_d7.items():
                     chip_obj.selected = dia in automacoes["D7"]["dias_agenda"]
                 
-                # Atualiza a interface apenas com as marcações recuperadas
                 page.update()
         except Exception as e:
-            print(f"Erro ao carregar dados em background: {e}")
+            print(f"Erro ao carregar dados locais: {e}")
 
-    # Executa a leitura com os cards já desenhados na interface
     carregar_e_atualizar_interface()
 
-    # Dispara o loop de monitoramento de tempo em paralelo
+    # Inicia a Thread sem bloqueios de sintaxe
     t = threading.Thread(target=loop_verificacao_horario, daemon=True)
     t.start()
 
