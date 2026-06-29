@@ -4,6 +4,7 @@ import random
 import datetime
 import threading
 import time
+import json
 
 # --- CONFIGURAÇÕES MQTT ---
 MQTT_SERVER = "emqx.ifspb-czemnumeros.com.br"
@@ -11,7 +12,7 @@ MQTT_PORT = 1883
 MQTT_USER = "esp12_01"
 MQTT_PASS = "esp12_01"
 
-# Dicionário global para armazenar as configurações de automação de cada relé
+# Dicionário padrão na memória RAM
 automacoes = {
     "D6": {"timer_minutos": 0, "hora_agenda": "", "dias_agenda": set()},
     "D7": {"timer_minutos": 0, "hora_agenda": "", "dias_agenda": set()}
@@ -24,11 +25,47 @@ def main(page: ft.Page):
     page.window_height = 700
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
 
+    # --- CARREGAR DADOS SALVOS DO DISCO DO CELULAR ---
+    def carregar_dados_persistidos():
+        try:
+            dados_salvos = page.client_storage.get("config_automacoes")
+            if dados_salvos:
+                dados_dict = json.loads(dados_salvos)
+                for pino in ["D6", "D7"]:
+                    if pino in dados_dict:
+                        automacoes[pino]["timer_minutos"] = dados_dict[pino].get("timer_minutos", 0)
+                        automacoes[pino]["hora_agenda"] = dados_dict[pino].get("hora_agenda", "")
+                        automacoes[pino]["dias_agenda"] = set(dados_dict[pino].get("dias_agenda", []))
+        except Exception as e:
+            print(f"Erro ao carregar dados locais: {e}")
+
+    carregar_dados_persistidos()
+
+    # --- FUNÇÃO PARA SALVAR NO DISCO DO CELULAR ---
+    def salvar_dados_no_disco():
+        try:
+            # Convertemos o 'set' para 'list' para o JSON conseguir serializar
+            dados_para_salvar = {
+                "D6": {
+                    "timer_minutos": automacoes["D6"]["timer_minutos"],
+                    "hora_agenda": automacoes["D6"]["hora_agenda"],
+                    "dias_agenda": list(automacoes["D6"]["dias_agenda"])
+                },
+                "D7": {
+                    "timer_minutos": automacoes["D7"]["timer_minutos"],
+                    "hora_agenda": automacoes["D7"]["hora_agenda"],
+                    "dias_agenda": list(automacoes["D7"]["dias_agenda"])
+                }
+            }
+            page.client_storage.set("config_automacoes", json.dumps(dados_para_salvar))
+        except Exception as e:
+            print(f"Erro ao persistir dados: {e}")
+
     # --- BARRA NATIVA SUPERIOR ---
     page.appbar = ft.AppBar(
         title=ft.Text("🏡 AUTOMAÇÃO", size=22, weight=ft.FontWeight.BOLD),
         center_title=True,
-        bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST, # Mantido em maiúsculo para compatibilidade local
+        bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
     )
 
     # --- STATUS DO BROKER ---
@@ -71,32 +108,33 @@ def main(page: ft.Page):
     def loop_verificacao_horario():
         while True:
             agora = datetime.datetime.now()
-            # 0=Segunda, 1=Terça... 6=Domingo
             dias_map = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
             dia_atual_str = dias_map[agora.weekday()]
             hora_atual_str = agora.strftime("%H:%M")
 
             for pino, dados in automacoes.items():
-                # Verificação da Agenda Semanal para ligar
                 if dados["hora_agenda"] == hora_atual_str and dia_atual_str in dados["dias_agenda"]:
                     mqttc.publish(pino, "ON")
-                    # Atualiza o estado visual do switch correspondente na tela
                     if pino == "D6":
                         switch_luz.value = True
                     if pino == "D7":
                         switch_tomada.value = True
                     page.update()
 
-            # Dorme por 60 segundos de forma isolada na Thread para não congelar o app
             time.sleep(60)
 
     # --- FUNÇÃO PARA CRIAR O CONTEINER EXPANSÍVEL DE AUTOMACÃO ---
     def criar_bloco_automacao(pino_rele):
-        txt_timer = ft.TextField(label="Minutos", value="30", width=90, text_align=ft.TextAlign.CENTER, dense=True)
-        txt_hora = ft.TextField(label="HH:MM", value="18:00", width=90, text_align=ft.TextAlign.CENTER, dense=True)
+        # Carrega os valores previamente salvos para preencher a interface visual
+        v_hora = automacoes[pino_rele]["hora_agenda"] if automacoes[pino_rele]["hora_agenda"] else "18:00"
+        v_timer = str(automacoes[pino_rele]["timer_minutos"]) if automacoes[pino_rele]["timer_minutos"] > 0 else "30"
+
+        txt_timer = ft.TextField(label="Minutos", value=v_timer, width=90, text_align=ft.TextAlign.CENTER, dense=True)
+        txt_hora = ft.TextField(label="HH:MM", value=v_hora, width=90, text_align=ft.TextAlign.CENTER, dense=True)
         
         def salvar_agenda(e):
             automacoes[pino_rele]["hora_agenda"] = txt_hora.value
+            salvar_dados_no_disco() # Grava no armazenamento físico
             page.open(ft.SnackBar(ft.Text(f"Agenda de {pino_rele} salva para às {txt_hora.value}!")))
 
         def alternar_dia_chip(e):
@@ -105,13 +143,17 @@ def main(page: ft.Page):
                 automacoes[pino_rele]["dias_agenda"].add(dia)
             else:
                 automacoes[pino_rele]["dias_agenda"].discard(dia)
+            salvar_dados_no_disco() # Atualiza os dias selecionados no disco
 
         dias_semana = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+        
+        # Reconstrói a linha de chips marcando como 'selected' os dias que já estavam salvos
         linha_dias = ft.Row(
             [
                 ft.Chip(
                     label=ft.Text(d), 
-                    selectable=True, 
+                    selectable=True,
+                    selected=d in automacoes[pino_rele]["dias_agenda"],
                     on_select=alternar_dia_chip
                 ) for d in dias_semana
             ],
@@ -184,17 +226,16 @@ def main(page: ft.Page):
 
     # --- MONTAGEM DA INTERFACE NA TELA ---
     page.add(
-        ft.Container(height=10), # Substituído padding problemático por espaçador nativo
+        ft.Container(height=10),
         ft.Row([status_led, status_text], alignment=ft.MainAxisAlignment.CENTER),
         ft.Divider(),
         card_luz,
         card_tomada
     )
 
-    # Força a renderização imediata de todos os elementos adicionados antes de abrir a Thread
     page.update()
 
-    # Dispara o loop de checagem em paralelo de forma segura (Evita tela preta no celular)
+    # Dispara o loop de checagem em paralelo
     t = threading.Thread(target=loop_verificacao_horario, daemon=True)
     t.start()
 
