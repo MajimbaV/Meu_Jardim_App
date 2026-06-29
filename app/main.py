@@ -12,7 +12,7 @@ MQTT_PORT = 1883
 MQTT_USER = "esp12_01"
 MQTT_PASS = "esp12_01"
 
-# Dicionário padrão na memória RAM
+# Dicionário global para armazenar as configurações de automação
 automacoes = {
     "D6": {"timer_minutos": 0, "hora_agenda": "", "dias_agenda": set()},
     "D7": {"timer_minutos": 0, "hora_agenda": "", "dias_agenda": set()}
@@ -24,42 +24,6 @@ def main(page: ft.Page):
     page.window_width = 400
     page.window_height = 700
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
-
-    # --- CARREGAR DADOS SALVOS DO DISCO DO CELULAR ---
-    def carregar_dados_persistidos():
-        try:
-            dados_salvos = page.client_storage.get("config_automacoes")
-            if dados_salvos:
-                dados_dict = json.loads(dados_salvos)
-                for pino in ["D6", "D7"]:
-                    if pino in dados_dict:
-                        automacoes[pino]["timer_minutos"] = dados_dict[pino].get("timer_minutos", 0)
-                        automacoes[pino]["hora_agenda"] = dados_dict[pino].get("hora_agenda", "")
-                        automacoes[pino]["dias_agenda"] = set(dados_dict[pino].get("dias_agenda", []))
-        except Exception as e:
-            print(f"Erro ao carregar dados locais: {e}")
-
-    carregar_dados_persistidos()
-
-    # --- FUNÇÃO PARA SALVAR NO DISCO DO CELULAR ---
-    def salvar_dados_no_disco():
-        try:
-            # Convertemos o 'set' para 'list' para o JSON conseguir serializar
-            dados_para_salvar = {
-                "D6": {
-                    "timer_minutos": automacoes["D6"]["timer_minutos"],
-                    "hora_agenda": automacoes["D6"]["hora_agenda"],
-                    "dias_agenda": list(automacoes["D6"]["dias_agenda"])
-                },
-                "D7": {
-                    "timer_minutos": automacoes["D7"]["timer_minutos"],
-                    "hora_agenda": automacoes["D7"]["hora_agenda"],
-                    "dias_agenda": list(automacoes["D7"]["dias_agenda"])
-                }
-            }
-            page.client_storage.set("config_automacoes", json.dumps(dados_para_salvar))
-        except Exception as e:
-            print(f"Erro ao persistir dados: {e}")
 
     # --- BARRA NATIVA SUPERIOR ---
     page.appbar = ft.AppBar(
@@ -110,7 +74,7 @@ def main(page: ft.Page):
             agora = datetime.datetime.now()
             dias_map = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
             dia_atual_str = dias_map[agora.weekday()]
-            hora_atual_str = agora.strftime("%H:%M")
+            hora_atual_str = grandma = agora.strftime("%H:%M")
 
             for pino, dados in automacoes.items():
                 if dados["hora_agenda"] == hora_atual_str and dia_atual_str in dados["dias_agenda"]:
@@ -123,18 +87,38 @@ def main(page: ft.Page):
 
             time.sleep(60)
 
-    # --- FUNÇÃO PARA CRIAR O CONTEINER EXPANSÍVEL DE AUTOMACÃO ---
-    def criar_bloco_automacao(pino_rele):
-        # Carrega os valores previamente salvos para preencher a interface visual
-        v_hora = automacoes[pino_rele]["hora_agenda"] if automacoes[pino_rele]["hora_agenda"] else "18:00"
-        v_timer = str(automacoes[pino_rele]["timer_minutos"]) if automacoes[pino_rele]["timer_minutos"] > 0 else "30"
+    # --- FUNÇÃO PARA SALVAR NO DISCO ---
+    def salvar_dados_no_disco():
+        try:
+            dados_para_salvar = {
+                "D6": {
+                    "timer_minutos": automacoes["D6"]["timer_minutos"],
+                    "hora_agenda": automacoes["D6"]["hora_agenda"],
+                    "dias_agenda": list(automacoes["D6"]["dias_agenda"])
+                },
+                "D7": {
+                    "timer_minutos": automacoes["D7"]["timer_minutos"],
+                    "hora_agenda": automacoes["D7"]["hora_agenda"],
+                    "dias_agenda": list(automacoes["D7"]["dias_agenda"])
+                }
+            }
+            page.client_storage.set("config_automacoes", json.dumps(dados_para_salvar))
+        except Exception as e:
+            print(f"Erro ao persistir dados: {e}")
 
-        txt_timer = ft.TextField(label="Minutos", value=v_timer, width=90, text_align=ft.TextAlign.CENTER, dense=True)
-        txt_hora = ft.TextField(label="HH:MM", value=v_hora, width=90, text_align=ft.TextAlign.CENTER, dense=True)
-        
+    # --- CAMPOS DE INTERFACE VISUAL ACESSÍVEIS REORGANIZADOS ---
+    txt_timer_d6 = ft.TextField(label="Minutos", value="30", width=90, text_align=ft.TextAlign.CENTER, dense=True)
+    txt_hora_d6 = ft.TextField(label="HH:MM", value="18:00", width=90, text_align=ft.TextAlign.CENTER, dense=True)
+    chips_d6 = {}
+
+    txt_timer_d7 = ft.TextField(label="Minutos", value="30", width=90, text_align=ft.TextAlign.CENTER, dense=True)
+    txt_hora_d7 = ft.TextField(label="HH:MM", value="18:00", width=90, text_align=ft.TextAlign.CENTER, dense=True)
+    chips_d7 = {}
+
+    def criar_bloco_automacao(pino_rele, txt_timer, txt_hora, chips_dict):
         def salvar_agenda(e):
             automacoes[pino_rele]["hora_agenda"] = txt_hora.value
-            salvar_dados_no_disco() # Grava no armazenamento físico
+            salvar_dados_no_disco()
             page.open(ft.SnackBar(ft.Text(f"Agenda de {pino_rele} salva para às {txt_hora.value}!")))
 
         def alternar_dia_chip(e):
@@ -143,23 +127,22 @@ def main(page: ft.Page):
                 automacoes[pino_rele]["dias_agenda"].add(dia)
             else:
                 automacoes[pino_rele]["dias_agenda"].discard(dia)
-            salvar_dados_no_disco() # Atualiza os dias selecionados no disco
+            salvar_dados_no_disco()
 
         dias_semana = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
         
-        # Reconstrói a linha de chips marcando como 'selected' os dias que já estavam salvos
-        linha_dias = ft.Row(
-            [
-                ft.Chip(
-                    label=ft.Text(d), 
-                    selectable=True,
-                    selected=d in automacoes[pino_rele]["dias_agenda"],
-                    on_select=alternar_dia_chip
-                ) for d in dias_semana
-            ],
-            wrap=True,
-            alignment=ft.MainAxisAlignment.CENTER
-        )
+        lista_chips = []
+        for d in dias_semana:
+            ch = ft.Chip(
+                label=ft.Text(d), 
+                selectable=True,
+                selected=False,
+                on_select=alternar_dia_chip
+            )
+            chips_dict[d] = ch
+            lista_chips.append(ch)
+
+        linha_dias = ft.Row(lista_chips, wrap=True, alignment=ft.MainAxisAlignment.CENTER)
 
         return ft.ExpansionTile(
             title=ft.Text("Configurar Temporizador e Agenda", size=13, color=ft.Colors.BLUE_200),
@@ -170,7 +153,6 @@ def main(page: ft.Page):
                     bgcolor=ft.Colors.BLACK26,
                     border_radius=8,
                     content=ft.Column([
-                        # Estrutura do Timer
                         ft.Row([
                             ft.Icon(ft.Icons.TIMER, color="amber"),
                             ft.Text("Desligar em:", weight=ft.FontWeight.W_500),
@@ -180,7 +162,6 @@ def main(page: ft.Page):
                         
                         ft.Divider(height=10, color="white10"),
                         
-                        # Estrutura da Agenda
                         ft.Row([
                             ft.Icon(ft.Icons.SCHEDULE, color="blue"),
                             ft.Text("Ligar às:", weight=ft.FontWeight.W_500),
@@ -206,7 +187,7 @@ def main(page: ft.Page):
                     ft.Row([ft.Icon(ft.Icons.LIGHTBULB, color="amber", size=28), ft.Text("Luz (D6)", size=18, weight=ft.FontWeight.W_500)]),
                     switch_luz
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                criar_bloco_automacao("D6")
+                criar_bloco_automacao("D6", txt_timer_d6, txt_hora_d6, chips_d6)
             ])
         )
     )
@@ -219,12 +200,12 @@ def main(page: ft.Page):
                     ft.Row([ft.Icon(ft.Icons.POWER, color="blue_grey_200", size=28), ft.Text("Tomada (D7)", size=18, weight=ft.FontWeight.W_500)]),
                     switch_tomada
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                criar_bloco_automacao("D7")
+                criar_bloco_automacao("D7", txt_timer_d7, txt_hora_d7, chips_d7)
             ])
         )
     )
 
-    # --- MONTAGEM DA INTERFACE NA TELA ---
+    # --- MONTAGEM COMPLETA DA INTERFACE (MUITO RÁPIDA) ---
     page.add(
         ft.Container(height=10),
         ft.Row([status_led, status_text], alignment=ft.MainAxisAlignment.CENTER),
@@ -233,9 +214,48 @@ def main(page: ft.Page):
         card_tomada
     )
 
+    # Força a renderização visual imediata na tela do Android para evitar tela escura
     page.update()
 
-    # Dispara o loop de checagem em paralelo
+    # --- CARREGAMENTO ASSÍNCRONO DOS DADOS APÓS A TELA ESTAR PRONTA ---
+    def carregar_e_atualizar_interface():
+        try:
+            dados_salvos = page.client_storage.get("config_automacoes")
+            if dados_salvos:
+                dados_dict = json.loads(dados_salvos)
+                
+                # Atualiza dicionário global
+                for pino in ["D6", "D7"]:
+                    if pino in dados_dict:
+                        automacoes[pino]["timer_minutos"] = dados_dict[pino].get("timer_minutos", 0)
+                        automacoes[pino]["hora_agenda"] = dados_dict[pino].get("hora_agenda", "")
+                        automacoes[pino]["dias_agenda"] = set(dados_dict[pino].get("dias_agenda", []))
+
+                # Alimenta os inputs da Luz (D6)
+                if automacoes["D6"]["hora_agenda"]:
+                    txt_hora_d6.value = automacoes["D6"]["hora_agenda"]
+                if automacoes["D6"]["timer_minutos"] > 0:
+                    txt_timer_d6.value = str(automacoes["D6"]["timer_minutos"])
+                for dia, chip_obj in chips_d6.items():
+                    chip_obj.selected = dia in automacoes["D6"]["dias_agenda"]
+
+                # Alimenta os inputs da Tomada (D7)
+                if automacoes["D7"]["hora_agenda"]:
+                    txt_hora_d7.value = automacoes["D7"]["hora_agenda"]
+                if automacoes["D7"]["timer_minutos"] > 0:
+                    txt_timer_d7.value = str(automacoes["D7"]["timer_minutos"])
+                for dia, chip_obj in chips_d7.items():
+                    chip_obj.selected = dia in automacoes["D7"]["dias_agenda"]
+                
+                # Atualiza a interface apenas com as marcações recuperadas
+                page.update()
+        except Exception as e:
+            print(f"Erro ao carregar dados em background: {e}")
+
+    # Executa a leitura com os cards já desenhados na interface
+    carregar_e_atualizar_interface()
+
+    # Dispara o loop de monitoramento de tempo em paralelo
     t = threading.Thread(target=loop_verificacao_horario, daemon=True)
     t.start()
 
