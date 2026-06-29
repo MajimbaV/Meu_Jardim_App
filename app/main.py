@@ -118,7 +118,7 @@ def main(page: ft.Page):
         switch_componente.value = True
         page.update()
 
-        segundos = minutes = minutos * 60
+        segundos = minutos * 60
         t = threading.Timer(segundos, desligar_por_timeout, args=[pino_rele, switch_componente])
         automacoes[pino_rele]["timer_objeto"] = t
         automacoes[pino_rele]["timer_minutos"] = minutos
@@ -147,13 +147,18 @@ def main(page: ft.Page):
             page.open(ft.SnackBar(ft.Text(f"Agenda de {pino_rele} salva para as {txt_hora.value}!")))
 
         def alternar_dia_btn(e):
-            dia = e.control.data
+            # Como usamos GestureDetector, o controle clicado é o Container interno (content)
+            container_alvo = e.control.content
+            dia = container_alvo.data
+            
             if dia in automacoes[pino_rele]["dias_agenda"]:
                 automacoes[pino_rele]["dias_agenda"].discard(dia)
-                e.control.style = ft.ButtonStyle(bgcolor=None)
+                container_alvo.bgcolor = "transparent"
+                container_alvo.border = ft.border.all(1, "white30")
             else:
                 automacoes[pino_rele]["dias_agenda"].add(dia)
-                e.control.style = ft.ButtonStyle(bgcolor="blue")
+                container_alvo.bgcolor = "blue"
+                container_alvo.border = ft.border.all(1, "blue")
             
             salvar_dados_no_disco()
             page.update()
@@ -162,19 +167,27 @@ def main(page: ft.Page):
         lista_botoes = []
         
         for d in dias_semana:
-            # Substituído padding instanciado por valor inteiro/direto para máxima compatibilidade
-            btn = ft.ElevatedButton(
-                text=d,
-                data=d,
-                style=ft.ButtonStyle(bgcolor=None),
-                content=ft.Container(
-                    content=ft.Text(d, size=11, weight="bold"),
-                    padding=2
-                ),
-                on_click=alternar_dia_btn
+            # Criando chips customizados usando Containers puros dentro de um detector de cliques
+            container_chip = ft.Container(
+                content=ft.Text(d, size=11, weight="bold", color="white"),
+                alignment=ft.alignment.center,
+                padding=8,
+                width=45,
+                height=32,
+                border_radius=6,
+                border=ft.border.all(1, "white30"),
+                bgcolor="transparent",
+                data=d # Guarda o dia da semana aqui
             )
-            buttons_dict[d] = btn
-            lista_botoes.append(btn)
+            
+            detector_clique = ft.GestureDetector(
+                content=container_chip,
+                on_tap=alternar_dia_btn
+            )
+            
+            # Mapeamos o container para conseguir alterar sua cor depois via persistência de dados
+            buttons_dict[d] = container_chip
+            lista_botoes.append(detector_clique)
 
         return ft.ExpansionTile(
             title=ft.Text("Configurar Temporizador e Agenda", size=13, color="blue200"),
@@ -275,11 +288,14 @@ def main(page: ft.Page):
                         if automacoes[pino]["timer_minutos"] > 0:
                             txt_timer_comp.value = str(automacoes[pino]["timer_minutos"])
                         
-                        for dia, btn_obj in btns_dict.items():
+                        # Restaura o estado visual dos containers customizados
+                        for dia, container_obj in btns_dict.items():
                             if dia in automacoes[pino]["dias_agenda"]:
-                                btn_obj.style = ft.ButtonStyle(bgcolor="blue")
+                                container_obj.bgcolor = "blue"
+                                container_obj.border = ft.border.all(1, "blue")
                             else:
-                                btn_obj.style = ft.ButtonStyle(bgcolor=None)
+                                container_obj.bgcolor = "transparent"
+                                container_obj.border = ft.border.all(1, "white30")
                 
                 page.update()
         except Exception as e:
