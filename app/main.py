@@ -19,7 +19,7 @@ def main(page: ft.Page):
     page.appbar = ft.AppBar(
         title=ft.Text("🏡 AUTOMAÇÃO", size=22, weight=ft.FontWeight.BOLD),
         center_title=True,
-        bgcolor=ft.colors.SURFACE_CONTAINER_HIGHEST, 
+        bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST, 
     )
 
     # Círculo de status feito com um Container customizado
@@ -69,10 +69,11 @@ def main(page: ft.Page):
 
     # Interface Visual (Removido o título duplicado daqui de dentro)
     page.add(
+        ft.Container(height=15),
         ft.Row(
             [status_led, status_text], 
             alignment=ft.MainAxisAlignment.CENTER,
-            padding=ft.padding.only(top=15, bottom=10) # Um leve respiro abaixo da AppBar
+           # padding=ft.padding.only(top=15, bottom=10) # Um leve respiro abaixo da AppBar
         ),
         ft.Divider(),
         
