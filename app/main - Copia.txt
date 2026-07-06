@@ -177,114 +177,110 @@ def main(page: ft.Page):
     
     carregar_dados_local()
 
-# --- CONSTRUTOR DE BLOCOS ---
-def criar_bloco_automacao(pino_rele, txt_timer, txt_hora, buttons_dict, switch_componente):
-    def salvar_agenda(e):
-        automacoes[pino_rele]["hora_agenda"] = txt_hora.value
-        salvar_dados_no_disco()
-        page.snack_bar = ft.SnackBar(ft.Text(f"Agenda de {pino_rele} salva para as {txt_hora.value}!"))
-        page.snack_bar.open = True
-        page.update()
+    # --- CONSTRUTOR DE BLOCOS ---
+    def criar_bloco_automacao(pino_rele, txt_timer, txt_hora, buttons_dict, switch_componente):
+        def salvar_agenda(e):
+            automacoes[pino_rele]["hora_agenda"] = txt_hora.value
+            salvar_dados_no_disco()
+            page.snack_bar = ft.SnackBar(ft.Text(f"Agenda de {pino_rele} salva para as {txt_hora.value}!"))
+            page.snack_bar.open = True
+            page.update()
 
-    def alternar_dia_btn(e):
-        # Acessa o container que está dentro do GestureDetector
-        container_alvo = e.control.content
-        dia = container_alvo.data
-        texto_alvo = container_alvo.content
+        def alternar_dia_btn(e):
+            container_alvo = e.control.content
+            dia = container_alvo.data
+            
+            if dia in automacoes[pino_rele]["dias_agenda"]:
+                automacoes[pino_rele]["dias_agenda"].discard(dia)
+                container_alvo.bgcolor = "transparent"
+                container_alvo.border = ft.Border(
+                    ft.BorderSide(1, "white30"), ft.BorderSide(1, "white30"),
+                    ft.BorderSide(1, "white30"), ft.BorderSide(1, "white30")
+                )
+            else:
+                automacoes[pino_rele]["dias_agenda"].add(dia)
+                container_alvo.bgcolor = "blue"
+                container_alvo.border = ft.Border(
+                    ft.BorderSide(1, "blue"), ft.BorderSide(1, "blue"),
+                    ft.BorderSide(1, "blue"), ft.BorderSide(1, "blue")
+                )
+            
+            salvar_dados_no_disco()
+            page.update()
 
-        if dia in automacoes[pino_rele]["dias_agenda"]:
-            automacoes[pino_rele]["dias_agenda"].discard(dia)
-            container_alvo.bgcolor = "transparent"
-            container_alvo.border = ft.Border(
-                ft.BorderSide(1, "black38"), ft.BorderSide(1, "black38"),
-                ft.BorderSide(1, "black38"), ft.BorderSide(1, "black38")
+        dias_semana = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+        lista_botoes = []
+        
+        for d in dias_semana:
+            esta_selecionado = d in automacoes[pino_rele]["dias_agenda"]
+            bgcolor = "blue" if esta_selecionado else "transparent"
+            cor_borda = "blue" if esta_selecionado else "white30"
+            
+            container_chip = ft.Container(
+                content=ft.Text(d, size=11, weight="bold", color="white"),
+                alignment="center",
+                padding=8,
+                width=45,
+                height=32,
+                border_radius=6,
+                border=ft.Border(
+                    ft.BorderSide(1, cor_borda), ft.BorderSide(1, cor_borda),
+                    ft.BorderSide(1, cor_borda), ft.BorderSide(1, cor_borda)
+                ),
+                bgcolor=bgcolor,
+                data=d
             )
-            texto_alvo.color = "black"  # Texto preto no fundo claro quando inativo
-        else:
-            automacoes[pino_rele]["dias_agenda"].add(dia)
-            container_alvo.bgcolor = "blue"
-            container_alvo.border = ft.Border(
-                ft.BorderSide(1, "blue"), ft.BorderSide(1, "blue"),
-                ft.BorderSide(1, "blue"), ft.BorderSide(1, "blue")
+            
+            detector_clique = ft.GestureDetector(
+                content=container_chip,
+                on_tap=alternar_dia_btn
             )
-            texto_alvo.color = "white"  # Texto branco no fundo azul quando ativo
+            
+            buttons_dict[d] = container_chip
+            lista_botoes.append(detector_clique)
 
-        salvar_dados_no_disco()
-        page.update()
+        txt_hora.value = automacoes[pino_rele]["hora_agenda"]
+        if automacoes[pino_rele]["timer_minutos"] > 0:
+            txt_timer.value = str(automacoes[pino_rele]["timer_minutos"])
 
-    dias_semana = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
-    lista_botoes = []
-
-    for d in dias_semana:
-        esta_selecionado = d in automacoes[pino_rele]["dias_agenda"]
-        bgcolor = "blue" if esta_selecionado else "transparent"
-        cor_borda = "blue" if esta_selecionado else "black38"
-        cor_texto = "white" if esta_selecionado else "black"
-
-        container_chip = ft.Container(
-            content=ft.Text(d, size=11, weight="bold", color=cor_texto),
-            alignment="center",
-            padding=8,
-            width=45,
-            height=32,
-            border_radius=6,
-            border=ft.Border(
-                ft.BorderSide(1, cor_borda), ft.BorderSide(1, cor_borda),
-                ft.BorderSide(1, cor_borda), ft.BorderSide(1, cor_borda)
-            ),
-            bgcolor=bgcolor,
-            data=d
-        )
-
-        detector_clique = ft.GestureDetector(
-            content=container_chip,
-            on_tap=alternar_dia_btn
-        )
-
-        buttons_dict[d] = container_chip
-        lista_botoes.append(detector_clique)
-
-    txt_hora.value = automacoes[pino_rele]["hora_agenda"]
-    if automacoes[pino_rele]["timer_minutos"] > 0:
-        txt_timer.value = str(automacoes[pino_rele]["timer_minutos"])
-
-    return ft.ExpansionTile(
-        title=ft.Text("Configurar Temporizador e Agenda", size=13, color="blue"),
-        maintain_state=True,
-        controls=[
-            ft.Container(
-                padding=10,
-                bgcolor="black12",  # Fundo suave para contrastar com a área cinza claro
-                border_radius=8,
-                content=ft.Column([
-                    ft.Row([
-                        ft.Icon(ft.Icons.TIMER, color="amber"),
-                        ft.Text("Desligar em:", weight="w500", color="black"),
-                        txt_timer,
-                        ft.IconButton(
-                            icon=ft.Icons.PLAY_ARROW_ROUNDED, 
-                            icon_color="green",
-                            on_click=lambda e: acionar_temporizador(pino_rele, txt_timer, switch_componente)
+        return ft.ExpansionTile(
+            title=ft.Text("Configurar Temporizador e Agenda", size=13, color="blue200"),
+            maintain_state=True,
+            controls=[
+                ft.Container(
+                    padding=10,
+                    bgcolor="black26",
+                    border_radius=8,
+                    content=ft.Column([
+                        ft.Row([
+                            ft.Icon(ft.Icons.TIMER, color="amber"),
+                            ft.Text("Desligar em:", weight="w500"),
+                            txt_timer,
+                            ft.IconButton(
+                                icon=ft.Icons.PLAY_ARROW_ROUNDED, 
+                                icon_color="green",
+                                on_click=lambda e: acionar_temporizador(pino_rele, txt_timer, switch_componente)
+                            )
+                        ], alignment="spaceBetween"),
+                        
+                        ft.Divider(height=10, color="white10"),
+                        
+                        ft.Row([
+                            ft.Icon(ft.Icons.SCHEDULE, color="blue"),
+                            ft.Text("Ligar às:", weight="w500"),
+                            txt_hora,
+                            ft.IconButton(icon=ft.Icons.SAVE, icon_color="blue", on_click=salvar_agenda)
+                        ], alignment="spaceBetween"),
+                        
+                        ft.Text("Dias da semana:", size=12, color="white60"),
+                        ft.Container(
+                            height=100,
+                            content=ft.Row(lista_botoes, wrap=True, alignment="center", spacing=5)
                         )
-                    ], alignment="spaceBetween"),
-                    
-                    ft.Divider(height=10, color="black12"),
-                    
-                    ft.Row([
-                        ft.Icon(ft.Icons.SCHEDULE, color="blue"),
-                        ft.Text("Ligar às:", weight="w500", color="black"),
-                        txt_hora,
-                        ft.IconButton(icon=ft.Icons.SAVE, icon_color="blue", on_click=salvar_agenda)
-                    ], alignment="spaceBetween"),
-                    
-                    ft.Text("Dias da semana:", size=12, color="black54"),
-                    ft.Container(
-                        content=ft.Row(lista_botoes, wrap=True, alignment="center", spacing=5)
-                    )
-                ], spacing=10)
-            )
-        ]
-    )
+                    ], spacing=10)
+                )
+            ]
+        )
 
     # --- MONTAGEM DOS CARDS ---
     card_luz = ft.Card(

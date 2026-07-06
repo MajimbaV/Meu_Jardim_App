@@ -15,8 +15,8 @@ MQTT_PASS = "esp12_01"
 
 # Dicionário global para controlar o estado das automações
 automacoes = {
-    "D6": {"timer_minutos": 0, "hora_agenda": "18:00", "dias_agenda": set(), "timer_objeto": None},
-    "D7": {"timer_minutos": 0, "hora_agenda": "18:00", "dias_agenda": set(), "timer_objeto": None}
+    "casa/rele1": {"timer_minutos": 0, "hora_agenda": "18:00", "dias_agenda": set(), "timer_objeto": None},
+    "casa/rele2": {"timer_minutos": 0, "hora_agenda": "18:00", "dias_agenda": set(), "timer_objeto": None}
 }
 
 def main(page: ft.Page):
@@ -73,20 +73,25 @@ def main(page: ft.Page):
             print(f"Erro MQTT: {err}")
 
     # --- PERSISTÊNCIA LOCAL ---
-    CONFIG_FILE = "config_automacoes.json"
+    # Usa caminho absoluto: arquivo fica na raiz do projeto (um nível acima de /app)
+    SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+    PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+    CONFIG_FILE = os.path.join(PROJECT_ROOT, "config_automacoes.json")
+    print(f"DEBUG: CONFIG_FILE path = {CONFIG_FILE}")
+    print(f"DEBUG: Arquivo existe? {os.path.exists(CONFIG_FILE)}")
     
     def salvar_dados_no_disco():
         try:
             dados_para_salvar = {
-                "D6": {
-                    "timer_minutos": automacoes["D6"]["timer_minutos"],
-                    "hora_agenda": automacoes["D6"]["hora_agenda"],
-                    "dias_agenda": list(automacoes["D6"]["dias_agenda"])
+                "casa/rele1": {
+                    "timer_minutos": automacoes["casa/rele1"]["timer_minutos"],
+                    "hora_agenda": automacoes["casa/rele1"]["hora_agenda"],
+                    "dias_agenda": list(automacoes["casa/rele1"]["dias_agenda"])
                 },
-                "D7": {
-                    "timer_minutos": automacoes["D7"]["timer_minutos"],
-                    "hora_agenda": automacoes["D7"]["hora_agenda"],
-                    "dias_agenda": list(automacoes["D7"]["dias_agenda"])
+                "casa/rele2": {
+                    "timer_minutos": automacoes["casa/rele2"]["timer_minutos"],
+                    "hora_agenda": automacoes["casa/rele2"]["hora_agenda"],
+                    "dias_agenda": list(automacoes["casa/rele2"]["dias_agenda"])
                 }
             }
             with open(CONFIG_FILE, "w") as f:
@@ -100,6 +105,10 @@ def main(page: ft.Page):
             mqttc.publish(pino_rele, "OFF")
             switch_componente.value = False
             automacoes[pino_rele]["timer_objeto"] = None
+            automacoes[pino_rele]["timer_minutos"] = 0
+            
+            page.snack_bar = ft.SnackBar(ft.Text(f"⏰ {pino_rele} desligado! Tempo terminou."))
+            page.snack_bar.open = True
             page.update()
         except Exception as e:
             print(f"Erro no timeout do timer: {e}")
@@ -117,12 +126,17 @@ def main(page: ft.Page):
             page.snack_bar = ft.SnackBar(ft.Text("O tempo deve ser maior que zero!"))
             page.snack_bar.open = True
             page.update()
+            return
 
         if automacoes[pino_rele]["timer_objeto"] is not None:
             automacoes[pino_rele]["timer_objeto"].cancel()
 
         mqttc.publish(pino_rele, "ON")
         switch_componente.value = True
+        
+        # Exibir mensagem de início
+        page.snack_bar = ft.SnackBar(ft.Text(f"⏱️ Temporizador iniciado por {minutos} minuto(s)"))
+        page.snack_bar.open = True
         page.update()
 
         segundos = minutos * 60
@@ -132,9 +146,6 @@ def main(page: ft.Page):
         t.start()
         
         salvar_dados_no_disco()
-        page.snack_bar = ft.SnackBar(ft.Text(f"{pino_rele} ligado! Vai desligar em {minutos} min."))
-        page.snack_bar.open = True
-        page.update()
 
     # --- INPUTS VISUAIS ---
     txt_timer_d6 = ft.TextField(label="Minutos", value="30", width=90, text_align="center", dense=True)
@@ -145,8 +156,33 @@ def main(page: ft.Page):
     txt_hora_d7 = ft.TextField(label="HH:MM", value="18:00", width=90, text_align="center", dense=True)
     buttons_d7 = {}
 
-    switch_luz = ft.Switch(value=False, data="D6", on_change=mudar_rele)
-    switch_tomada = ft.Switch(value=False, data="D7", on_change=mudar_rele)
+    switch_luz = ft.Switch(value=False, data="casa/rele1", on_change=mudar_rele)
+    switch_tomada = ft.Switch(value=False, data="casa/rele2", on_change=mudar_rele)
+
+    # --- CARREGA DADOS DO ARQUIVO ANTES DE CRIAR INTERFACE ---
+    def carregar_dados_local():
+        try:
+            if os.path.exists(CONFIG_FILE):
+                with open(CONFIG_FILE, "r") as f:
+                    dados_dict = json.load(f)
+                    print(f"DEBUG: Dados carregados do arquivo: {dados_dict}")
+                    
+                for pino in ["casa/rele1", "casa/rele2"]:
+                    if pino in dados_dict:
+                        automacoes[pino]["hora_agenda"] = dados_dict[pino].get("hora_agenda", "18:00")
+                        automacoes[pino]["timer_minutos"] = dados_dict[pino].get("timer_minutos", 0)
+                        dias_carregados = dados_dict[pino].get("dias_agenda", [])
+                        automacoes[pino]["dias_agenda"] = set(dias_carregados)
+                        print(f"DEBUG: {pino} - dias_agenda carregado: {dias_carregados} -> set: {automacoes[pino]['dias_agenda']}")
+                    else:
+                        print(f"DEBUG: {pino} não encontrado em dados_dict")
+            else:
+                print(f"DEBUG: Arquivo {CONFIG_FILE} não existe ainda")
+        except Exception as e:
+            print(f"Erro ao carregar dados: {e}")
+    
+    # Carrega dados ANTES de criar a interface
+    carregar_dados_local()
 
     # --- CONSTRUTOR DE BLOCOS ---
     def criar_bloco_automacao(pino_rele, txt_timer, txt_hora, buttons_dict, switch_componente):
@@ -177,8 +213,15 @@ def main(page: ft.Page):
         dias_semana = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
         lista_botoes = []
         
+        print(f"DEBUG criar_bloco_automacao: pino={pino_rele}, dias_agenda={automacoes[pino_rele]['dias_agenda']}, tipo={type(automacoes[pino_rele]['dias_agenda'])}")
+        
         for d in dias_semana:
-            # Criando chips customizados usando Containers puros dentro de um detector de cliques
+            # Criar container com cor baseada no estado salvo
+            bgcolor = "blue" if d in automacoes[pino_rele]["dias_agenda"] else "black26"
+            cor_borda = "blue" if d in automacoes[pino_rele]["dias_agenda"] else "white30"
+            
+            print(f"DEBUG: Criando botão {d} com bgcolor={bgcolor}, selecionado={d in automacoes[pino_rele]['dias_agenda']}")
+            
             container_chip = ft.Container(
                 content=ft.Text(d, size=11, weight="bold", color="white"),
                 alignment="center",
@@ -186,9 +229,9 @@ def main(page: ft.Page):
                 width=45,
                 height=32,
                 border_radius=6,
-                border=ft.border.Border(left=ft.border.BorderSide(1, "white30"), right=ft.border.BorderSide(1, "white30"), top=ft.border.BorderSide(1, "white30"), bottom=ft.border.BorderSide(1, "white30")),
-                bgcolor="transparent",
-                data=d # Guarda o dia da semana aqui
+                border=ft.border.Border(left=ft.border.BorderSide(1, cor_borda), right=ft.border.BorderSide(1, cor_borda), top=ft.border.BorderSide(1, cor_borda), bottom=ft.border.BorderSide(1, cor_borda)),
+                bgcolor=bgcolor,
+                data=d
             )
             
             detector_clique = ft.GestureDetector(
@@ -196,9 +239,15 @@ def main(page: ft.Page):
                 on_tap=alternar_dia_btn
             )
             
-            # Mapeamos o container para conseguir alterar sua cor depois via persistência de dados
             buttons_dict[d] = container_chip
             lista_botoes.append(detector_clique)
+        
+        print(f"DEBUG: Total de botões criados: {len(lista_botoes)}")
+
+        # Atualizar os campos de hora e minutos com dados carregados
+        txt_hora.value = automacoes[pino_rele]["hora_agenda"]
+        if automacoes[pino_rele]["timer_minutos"] > 0:
+            txt_timer.value = str(automacoes[pino_rele]["timer_minutos"])
 
         return ft.ExpansionTile(
             title=ft.Text("Configurar Temporizador e Agenda", size=13, color="blue200"),
@@ -232,7 +281,10 @@ def main(page: ft.Page):
                         ], alignment="spaceBetween"),
                         
                         ft.Text("Dias da semana:", size=12, color="white60"),
-                        ft.Row(lista_botoes, wrap=True, alignment="center", spacing=5)
+                        ft.Container(
+                            height=100,
+                            content=ft.Row(lista_botoes, wrap=True, alignment="center", spacing=5)
+                        )
                     ], spacing=10)
                 )
             ]
@@ -247,7 +299,7 @@ def main(page: ft.Page):
                     ft.Row([ft.Icon(ft.Icons.LIGHTBULB, color="amber", size=28), ft.Text("Luz (D6)", size=18, weight="w500")]),
                     switch_luz
                 ], alignment="spaceBetween"),
-                criar_bloco_automacao("D6", txt_timer_d6, txt_hora_d6, buttons_d6, switch_luz)
+                criar_bloco_automacao("casa/rele1", txt_timer_d6, txt_hora_d6, buttons_d6, switch_luz)
             ])
         )
     )
@@ -260,7 +312,7 @@ def main(page: ft.Page):
                     ft.Row([ft.Icon(ft.Icons.POWER, color="blueGrey200", size=28), ft.Text("Tomada (D7)", size=18, weight="w500")]),
                     switch_tomada
                 ], alignment="spaceBetween"),
-                criar_bloco_automacao("D7", txt_timer_d7, txt_hora_d7, buttons_d7, switch_tomada)
+                criar_bloco_automacao("casa/rele2", txt_timer_d7, txt_hora_d7, buttons_d7, switch_tomada)
             ])
         )
     )
@@ -276,41 +328,12 @@ def main(page: ft.Page):
     page.update()
 
     # --- PROCESSAMENTO ASSÍNCRONO EM BACKGROUND THREAD ---
-    def carregar_dados_e_conectar_mqtt():
-        time.sleep(0.2)
+    def conectar_mqtt_e_agendar():
         try:
             mqttc.connect(MQTT_SERVER, MQTT_PORT, 60)
             mqttc.loop_start()
         except Exception:
             pass
-
-        try:
-            if os.path.exists(CONFIG_FILE):
-                with open(CONFIG_FILE, "r") as f:
-                    dados_dict = json.load(f)
-                
-                for pino, txt_hora_comp, txt_timer_comp, btns_dict in [("D6", txt_hora_d6, txt_timer_d6, buttons_d6), ("D7", txt_hora_d7, txt_timer_d7, buttons_d7)]:
-                    if pino in dados_dict:
-                        automacoes[pino]["hora_agenda"] = dados_dict[pino].get("hora_agenda", "18:00")
-                        automacoes[pino]["timer_minutos"] = dados_dict[pino].get("timer_minutos", 0)
-                        automacoes[pino]["dias_agenda"] = set(dados_dict[pino].get("dias_agenda", []))
-                        
-                        txt_hora_comp.value = automacoes[pino]["hora_agenda"]
-                        if automacoes[pino]["timer_minutos"] > 0:
-                            txt_timer_comp.value = str(automacoes[pino]["timer_minutos"])
-                        
-                        # Restaura o estado visual dos containers customizados
-                        for dia, container_obj in btns_dict.items():
-                            if dia in automacoes[pino]["dias_agenda"]:
-                                container_obj.bgcolor = "blue"
-                                container_obj.border = ft.border.Border(left=ft.border.BorderSide(1, "blue"), right=ft.border.BorderSide(1, "blue"), top=ft.border.BorderSide(1, "blue"), bottom=ft.border.BorderSide(1, "blue"))
-                            else:
-                                container_obj.bgcolor = "transparent"
-                                container_obj.border = ft.border.Border(left=ft.border.BorderSide(1, "white30"), right=ft.border.BorderSide(1, "white30"), top=ft.border.BorderSide(1, "white30"), bottom=ft.border.BorderSide(1, "white30"))
-                
-                page.update()
-        except Exception as e:
-            print(f"Erro ao recuperar dados: {e}")
 
     # --- ENGINE DE AGENDAMENTO SEMANAL ---
     def loop_verificacao_horario():
@@ -323,15 +346,15 @@ def main(page: ft.Page):
             for pino, dados in automacoes.items():
                 if dados["hora_agenda"] == hora_atual_str and dia_atual_str in dados["dias_agenda"]:
                     mqttc.publish(pino, "ON")
-                    if pino == "D6":
+                    if pino == "casa/rele1":
                         switch_luz.value = True
-                    if pino == "D7":
+                    if pino == "casa/rele2":
                         switch_tomada.value = True
                     page.update()
 
             time.sleep(60)
 
-    threading.Thread(target=carregar_dados_e_conectar_mqtt, daemon=True).start()
+    threading.Thread(target=conectar_mqtt_e_agendar, daemon=True).start()
     threading.Thread(target=loop_verificacao_horario, daemon=True).start()
 
 ft.app(main)

@@ -1,1 +1,1 @@
-{"casa/rele1": {"timer_minutos": 0, "hora_agenda": "18:00", "dias_agenda": ["Seg"]}, "casa/rele2": {"timer_minutos": 1, "hora_agenda": "18:00", "dias_agenda": []}}
+{"casa/rele1": {"timer_minutos": 0, "hora_agenda": "18:00", "dias_agenda": []}, "casa/rele2": {"timer_minutos": 1, "hora_agenda": "18:00", "dias_agenda": ["Seg"]}}
