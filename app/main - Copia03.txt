@@ -107,9 +107,9 @@ def main(page: ft.Page):
             automacoes[pino_rele]["timer_objeto"] = None
             automacoes[pino_rele]["timer_minutos"] = 0
             
-            switch_componente.page.snack_bar = ft.SnackBar(ft.Text(f"⏰ {pino_rele} desligado! Tempo terminou."))
-            switch_componente.page.snack_bar.open = True
-            switch_componente.page.update()
+            page.snack_bar = ft.SnackBar(ft.Text(f"⏰ {pino_rele} desligado! Tempo terminou."))
+            page.snack_bar.open = True
+            page.update()
         except Exception as e:
             print(f"Erro no timeout do timer: {e}")
 
@@ -117,15 +117,15 @@ def main(page: ft.Page):
         try:
             minutos = int(txt_timer.value)
         except ValueError:
-            switch_componente.page.snack_bar = ft.SnackBar(ft.Text("Insira um número válido de minutos!"))
-            switch_componente.page.snack_bar.open = True
-            switch_componente.page.update()
+            page.snack_bar = ft.SnackBar(ft.Text("Insira um número válido de minutos!"))
+            page.snack_bar.open = True
+            page.update()
             return
 
         if minutos <= 0:
-            switch_componente.page.snack_bar = ft.SnackBar(ft.Text("O tempo deve ser maior que zero!"))
-            switch_componente.page.snack_bar.open = True
-            switch_componente.page.update()
+            page.snack_bar = ft.SnackBar(ft.Text("O tempo deve ser maior que zero!"))
+            page.snack_bar.open = True
+            page.update()
             return
 
         if automacoes[pino_rele]["timer_objeto"] is not None:
@@ -134,9 +134,9 @@ def main(page: ft.Page):
         mqttc.publish(pino_rele, "ON")
         switch_componente.value = True
         
-        switch_componente.page.snack_bar = ft.SnackBar(ft.Text(f"⏱️ Temporizador iniciado por {minutos} minuto(s)"))
-        switch_componente.page.snack_bar.open = True
-        switch_componente.page.update()
+        page.snack_bar = ft.SnackBar(ft.Text(f"⏱️ Temporizador iniciado por {minutos} minuto(s)"))
+        page.snack_bar.open = True
+        page.update()
 
         segundos = minutos * 60
         t = threading.Timer(segundos, desligar_por_timeout, args=[pino_rele, switch_componente])
@@ -183,9 +183,9 @@ def criar_bloco_automacao(pino_rele, txt_timer, txt_hora, buttons_dict, switch_c
     def salvar_agenda(e):
         automacoes[pino_rele]["hora_agenda"] = txt_hora.value
         salvar_dados_no_disco()
-        switch_componente.page.snack_bar = ft.SnackBar(ft.Text(f"Agenda de {pino_rele} salva para as {txt_hora.value}!"))
-        switch_componente.page.snack_bar.open = True
-        switch_componente.page.update()
+        page.snack_bar = ft.SnackBar(ft.Text(f"Agenda de {pino_rele} salva para as {txt_hora.value}!"))
+        page.snack_bar.open = True
+        page.update()
 
     def alternar_dia_btn(e):
         container_alvo = e.control.content
@@ -210,7 +210,7 @@ def criar_bloco_automacao(pino_rele, txt_timer, txt_hora, buttons_dict, switch_c
             texto_alvo.color = "white"
 
         salvar_dados_no_disco()
-        switch_componente.page.update()
+        page.update()
 
     dias_semana = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
     lista_botoes = []
