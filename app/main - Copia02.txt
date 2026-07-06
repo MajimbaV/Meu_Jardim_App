@@ -312,22 +312,14 @@ def criar_bloco_automacao(pino_rele, txt_timer, txt_hora, buttons_dict, switch_c
     )
 
     # --- RENDERIZAÇÃO DA INTERFACE ---
-    # Colocamos tudo dentro de uma Column com scroll para nunca quebrar no Android
-    conteudo_principal = ft.Column(
-        controls=[
-            ft.Container(height=15),
-            ft.Row([status_led, status_text], alignment="center"),
-            ft.Divider(),
-            card_luz,
-            card_tomada
-        ],
-        scroll=ft.ScrollMode.AUTO,
-        expand=True
+    page.add(
+        ft.Container(height=15),
+        ft.Row([status_led, status_text], alignment="center"),
+        ft.Divider(),
+        card_luz,
+        card_tomada
     )
-    
-    page.add(conteudo_principal)
     page.update()
-
 
     # --- PROCESSAMENTO ASSÍNCRONO EM BACKGROUND THREAD ---
     def conectar_mqtt_e_agendar():
