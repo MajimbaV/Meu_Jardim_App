@@ -224,7 +224,7 @@ __marimo__/
 *.bin
 *.elf
 
-# arquvios do app do meu jardim
+# arquivos do app do meu jardim
 .apk/
 *.aab
 *.zip
